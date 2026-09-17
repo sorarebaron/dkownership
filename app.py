@@ -72,17 +72,22 @@ def load_ownership(uploaded_file):
         [{"PLAYER": p, "CPT": cpt.get(p), "FLEX": flex.get(p)} for p in players]
     )
 
-    # Drop players who were never actually rostered (0% in both CPT and FLEX),
-    # so only players with real ownership appear on the graphic.
-    rostered = (out["CPT"].fillna(0) > 0) | (out["FLEX"].fillna(0) > 0)
+    # Drop players who weren't meaningfully rostered: keep a player only if their
+    # CPT or FLEX ownership rounds to at least 0.01% (anything that displays as
+    # 0.00% reads as a dash and counts as not owned).
+    rostered = out.apply(
+        lambda r: _shown(r["CPT"]) or _shown(r["FLEX"]), axis=1
+    )
     out = out[rostered]
 
-    # Sort: captained players first by CPT desc, then the rest by FLEX desc.
-    # Secondary keys break ties deterministically (FLEX desc, then name).
-    g1 = out[out["CPT"].notna()].sort_values(
+    # Sort: players with real CPT ownership first by CPT desc, then everyone
+    # whose CPT shows a dash (missing or 0.00%) by FLEX desc. Secondary keys
+    # break ties deterministically (FLEX desc, then name).
+    has_cpt = out["CPT"].apply(_shown)
+    g1 = out[has_cpt].sort_values(
         ["CPT", "FLEX", "PLAYER"], ascending=[False, False, True]
     )
-    g2 = out[out["CPT"].isna()].sort_values(
+    g2 = out[~has_cpt].sort_values(
         ["FLEX", "PLAYER"], ascending=[False, True]
     )
     return pd.concat([g1, g2]).reset_index(drop=True)
@@ -96,8 +101,16 @@ def _abbreviate(name):
     return name
 
 
+def _shown(v):
+    """True when an ownership value displays as a real (non-zero) percentage.
+    A missing value, or one DraftKings rounds to 0.00%, is treated as 'not
+    owned' — it shows as a dash and doesn't keep a player on the graphic.
+    """
+    return pd.notna(v) and f"{v:.2f}" != "0.00"
+
+
 def _fmt(v):
-    return "—" if pd.isna(v) else f"{v:.2f}%"
+    return f"{v:.2f}%" if _shown(v) else "—"
 
 
 # ----------------------------------------------------------------------------
@@ -153,9 +166,9 @@ def build_graphic(df):
                 fw = (flex_r - flex_cell_l) * (flex_v / flex_max)
                 ax.add_patch(Rectangle((flex_r - fw, yc - bar_h / 2), fw, bar_h, color=GREEN, alpha=0.30, zorder=1))
             ax.text(name_x, yc, _abbreviate(cdf.at[i, "PLAYER"]), color=WHITE, fontsize=13.5, ha="left", va="center", zorder=3)
-            ax.text(cpt_r, yc, _fmt(cpt_v), color=ORANGE_TXT if not pd.isna(cpt_v) else MUTED,
+            ax.text(cpt_r, yc, _fmt(cpt_v), color=ORANGE_TXT if _shown(cpt_v) else MUTED,
                     fontsize=12.5, ha="right", va="center", zorder=3)
-            ax.text(flex_r, yc, _fmt(flex_v), color=GREEN_TXT if not pd.isna(flex_v) else MUTED,
+            ax.text(flex_r, yc, _fmt(flex_v), color=GREEN_TXT if _shown(flex_v) else MUTED,
                     fontsize=12.5, ha="right", va="center", zorder=3)
 
     ax.text(0.965, bottom * 0.4, "no shoes  /  no shirts  /  no tips", color="#5b6270",

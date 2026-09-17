@@ -72,6 +72,11 @@ def load_ownership(uploaded_file):
         [{"PLAYER": p, "CPT": cpt.get(p), "FLEX": flex.get(p)} for p in players]
     )
 
+    # Drop players who were never actually rostered (0% in both CPT and FLEX),
+    # so only players with real ownership appear on the graphic.
+    rostered = (out["CPT"].fillna(0) > 0) | (out["FLEX"].fillna(0) > 0)
+    out = out[rostered]
+
     # Sort: captained players first by CPT desc, then the rest by FLEX desc.
     # Secondary keys break ties deterministically (FLEX desc, then name).
     g1 = out[out["CPT"].notna()].sort_values(

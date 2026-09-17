@@ -171,9 +171,6 @@ def build_graphic(df):
             ax.text(flex_r, yc, _fmt(flex_v), color=GREEN_TXT if _shown(flex_v) else MUTED,
                     fontsize=12.5, ha="right", va="center", zorder=3)
 
-    ax.text(0.965, bottom * 0.4, "no shoes  /  no shirts  /  no tips", color="#5b6270",
-            fontsize=10.5, ha="right", va="center", style="italic")
-
     buf = io.BytesIO()
     plt.savefig(buf, format="png", dpi=200, bbox_inches="tight", facecolor=BG, pad_inches=0.28)
     plt.close(fig)
